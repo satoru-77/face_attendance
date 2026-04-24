@@ -177,7 +177,7 @@ ALTER DATABASE face_attendance_db OWNER TO face_admin;
 ### 2. Clone the Repository
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/face_attendance.git
+git clone https://github.com/satoru-77/face_attendance.git
 cd face_attendance
 ```
 
@@ -479,7 +479,7 @@ Go to **https://github.com** → Sign Up (free).
 3. Click **Create repository**
 4. GitHub will show you a page with the remote URL — copy it, e.g.:
    ```
-   https://github.com/YOUR_USERNAME/face_attendance.git
+   https://github.com/satoru-77/face_attendance.git
    ```
 
 ---
@@ -514,7 +514,7 @@ git commit -m "Initial commit: FaceTrack face attendance system"
 git branch -M main
 
 # 6. Link to your GitHub repo (paste YOUR URL from Step 3)
-git remote add origin https://github.com/YOUR_USERNAME/face_attendance.git
+git remote add origin https://github.com/satoru-77/face_attendance.git
 
 # 7. Push!
 git push -u origin main
