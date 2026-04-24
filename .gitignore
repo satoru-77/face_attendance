@@ -1,0 +1,107 @@
+# ─── Python ──────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+*.pyd
+.Python
+*.egg
+*.egg-info/
+dist/
+build/
+eggs/
+parts/
+var/
+sdist/
+wheels/
+*.egg-link
+.installed.cfg
+
+# ─── Virtual Environment ──────────────────────────────
+venv/
+env/
+.env/
+.venv/
+ENV/
+env.bak/
+venv.bak/
+
+# ─── Environment Variables (NEVER commit secrets) ────
+backend/.env
+.env
+.env.*
+!.env.example
+
+# ─── Django ──────────────────────────────────────────
+*.log
+local_settings.py
+backend/db.sqlite3
+backend/db.sqlite3-journal
+
+# Media uploads (face photos, captured images)
+backend/media/
+!backend/media/.gitkeep
+
+# Static files collected for production
+backend/staticfiles/
+backend/static/CACHE/
+
+# ─── InsightFace Model Weights ────────────────────────
+# Large binary model files (~500MB) — downloaded automatically on first run
+backend/.insightface/
+
+# ─── FAISS Index (auto-rebuilt from DB) ──────────────
+backend/face_index.faiss
+backend/face_index.pkl
+backend/*.faiss
+backend/*.pkl
+
+# ─── IDE / Editor ────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.pydevproject
+*.sublime-project
+*.sublime-workspace
+
+# ─── OS files ────────────────────────────────────────
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# ─── Node / Frontend ─────────────────────────────────
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/.nuxt/
+frontend/dist/
+frontend/.cache/
+*.npm
+.yarn-integrity
+
+# ─── Certificates / Keys ─────────────────────────────
+*.pem
+*.key
+*.cert
+*.crt
+*.p12
+
+# ─── Misc ────────────────────────────────────────────
+*.bak
+*.tmp
+*.temp
+coverage/
+.coverage
+htmlcov/
+.pytest_cache/
+.mypy_cache/
+.hypothesis/
+id_pass.md

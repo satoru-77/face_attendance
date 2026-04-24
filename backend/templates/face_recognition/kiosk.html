@@ -1,0 +1,271 @@
+{% extends 'base/base_kiosk.html' %}
+
+{% block content %}
+<div class="flex flex-col h-screen bg-slate-900 text-white" x-data="kioskApp()" x-init="init()">
+
+    <!-- Top Bar -->
+    <div class="flex items-center justify-between px-8 py-4 border-b border-slate-800">
+        <div class="flex items-center gap-3">
+            <i class="ph-fill ph-scan text-3xl text-blue-400"></i>
+            <div>
+                <h1 class="text-xl font-bold text-white">FaceTrack</h1>
+                <p class="text-xs text-slate-400">{{ location }} — Kiosk Check-in</p>
+            </div>
+        </div>
+        <div class="text-right">
+            <p id="clock" class="text-3xl font-mono font-bold text-white"></p>
+            <p id="date-display" class="text-xs text-slate-400"></p>
+        </div>
+    </div>
+
+    <!-- Main Area -->
+    <div class="flex flex-1 overflow-hidden">
+        
+        <!-- Camera Column -->
+        <div class="flex-1 flex flex-col items-center justify-center gap-6 p-8 relative">
+            
+            <!-- Camera Feed -->
+            <div class="relative rounded-2xl overflow-hidden shadow-2xl border-2 border-slate-700" style="width: 540px; height: 405px;">
+                <video id="video" autoplay playsinline class="w-full h-full object-cover scale-x-[-1]"></video>
+                <canvas id="overlay" class="absolute inset-0 w-full h-full scale-x-[-1]" style="width:540px;height:405px;"></canvas>
+
+                <!-- Scanning animation overlay when processing -->
+                <div id="scanning-line" class="absolute inset-x-0 hidden" style="height:2px; background: linear-gradient(90deg, transparent, #3b82f6, transparent); top: 0; animation: scanline 2s linear infinite;"></div>
+
+                <!-- Status badge overlaid on camera -->
+                <div id="camera-status" class="absolute bottom-4 left-1/2 -translate-x-1/2 px-4 py-1.5 rounded-full text-sm font-medium bg-slate-900/80 backdrop-blur text-slate-300 border border-slate-700">
+                    <i class="ph ph-circle text-yellow-400 animate-pulse"></i> Waiting for face…
+                </div>
+            </div>
+
+            <p class="text-slate-400 text-sm">Look directly at the camera. Recognition is automatic.</p>
+        </div>
+
+        <!-- Result Panel -->
+        <div class="w-96 bg-slate-800/60 border-l border-slate-700 flex flex-col p-8 gap-6">
+            
+            <!-- Idle State -->
+            <div id="state-idle" class="flex flex-col items-center justify-center h-full gap-4 text-center">
+                <div class="w-24 h-24 rounded-full bg-slate-700/50 flex items-center justify-center">
+                    <i class="ph ph-user text-5xl text-slate-500"></i>
+                </div>
+                <h2 class="text-lg font-medium text-slate-300">Ready to Check In</h2>
+                <p class="text-sm text-slate-500">Stand in front of the camera. <br>Your attendance will be marked automatically.</p>
+            </div>
+
+            <!-- Processing State -->
+            <div id="state-processing" class="hidden flex flex-col items-center justify-center h-full gap-4 text-center">
+                <div class="w-24 h-24 rounded-full bg-blue-500/10 border-2 border-blue-500/40 flex items-center justify-center">
+                    <svg class="w-10 h-10 text-blue-400 animate-spin" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                    </svg>
+                </div>
+                <h2 class="text-lg font-semibold text-blue-300 animate-pulse">Recognizing…</h2>
+                <p class="text-sm text-slate-500">Please hold still</p>
+            </div>
+
+            <!-- Success State -->
+            <div id="state-success" class="hidden flex flex-col items-center justify-center h-full gap-5 text-center">
+                <div class="w-24 h-24 rounded-full bg-emerald-500/10 border-2 border-emerald-500 flex items-center justify-center">
+                    <i class="ph-fill ph-check-circle text-5xl text-emerald-400"></i>
+                </div>
+                <div>
+                    <h2 id="res-action" class="text-sm font-medium text-emerald-400 uppercase tracking-widest">Check-In Successful</h2>
+                    <h3 id="res-name" class="text-2xl font-bold text-white mt-1">John Doe</h3>
+                    <p id="res-empid" class="text-sm text-slate-400 mt-1">CS2024001</p>
+                </div>
+                <div class="w-full bg-slate-700/50 rounded-xl p-4 space-y-2 text-left text-sm">
+                    <div class="flex items-center gap-3 text-slate-300">
+                        <i class="ph ph-buildings text-slate-400 w-5"></i>
+                        <span id="res-dept">Computer Science</span>
+                    </div>
+                    <div class="flex items-center gap-3 text-slate-300">
+                        <i class="ph ph-clock text-slate-400 w-5"></i>
+                        <span id="res-time">09:15 AM</span>
+                    </div>
+                    <div class="flex items-center gap-3 text-slate-300">
+                        <i class="ph ph-chart-bar text-slate-400 w-5"></i>
+                        <span>Confidence: <span id="res-confidence" class="font-bold text-emerald-400">98%</span></span>
+                    </div>
+                </div>
+                <p class="text-xs text-slate-600">Next check-in in <span id="cooldown-count">5</span>s</p>
+            </div>
+
+            <!-- Failure State -->
+            <div id="state-failure" class="hidden flex flex-col items-center justify-center h-full gap-4 text-center">
+                <div class="w-24 h-24 rounded-full bg-red-500/10 border-2 border-red-500/40 flex items-center justify-center">
+                    <i class="ph-fill ph-x-circle text-5xl text-red-400"></i>
+                </div>
+                <h2 class="text-xl font-bold text-red-300">Not Recognized</h2>
+                <p id="res-error" class="text-sm text-slate-400 max-w-xs">Please try again with better lighting or contact admin if not enrolled.</p>
+                <p class="text-xs text-slate-600">Retrying in <span id="retry-count">3</span>s</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    @keyframes scanline {
+        0% { top: 0%; }
+        100% { top: 100%; }
+    }
+</style>
+
+<script>
+// Get auth token from meta tag (the kiosk uses a CSRF + Django session approach)
+const CSRF_TOKEN = '{{ csrf_token }}';
+const CHECKIN_URL = '/api/attendance/checkin/';
+const LOCATION = '{{ location }}';
+
+let currentState = 'idle';
+let cooldownTimer = null;
+let captureInterval = null;
+let faceDetectedCount = 0;
+const FACE_FRAMES_NEEDED = 3; // stable face for 3 frames before capture
+
+const video = document.getElementById('video');
+const overlayCanvas = document.getElementById('overlay');
+const ctx = overlayCanvas.getContext('2d');
+
+// ── Clock ────────────────────────────────────────────────
+function updateClock() {
+    const now = new Date();
+    document.getElementById('clock').textContent = now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    document.getElementById('date-display').textContent = now.toLocaleDateString('en-IN', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' });
+}
+setInterval(updateClock, 1000);
+updateClock();
+
+// ── Camera Start ─────────────────────────────────────────
+async function startCamera() {
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 1280, height: 720, facingMode: 'user' }, audio: false });
+        video.srcObject = stream;
+        video.addEventListener('loadedmetadata', () => {
+            overlayCanvas.width = video.videoWidth || 640;
+            overlayCanvas.height = video.videoHeight || 480;
+            startAutoCapture();
+        });
+    } catch (err) {
+        console.error('Camera error:', err);
+        setStatus('⚠ Camera access denied. Check browser permissions.', 'yellow');
+    }
+}
+
+// ── Auto-Capture Loop ─────────────────────────────────────
+function startAutoCapture() {
+    captureInterval = setInterval(async () => {
+        if (currentState !== 'idle') return;
+        await captureAndSubmit();
+    }, 2000); // attempt every 2 seconds
+}
+
+// ── Capture + Submit ──────────────────────────────────────
+async function captureAndSubmit() {
+    if (video.readyState < 2) return;
+
+    // Draw frame to a temp canvas
+    const cap = document.createElement('canvas');
+    cap.width = video.videoWidth;
+    cap.height = video.videoHeight;
+    cap.getContext('2d').drawImage(video, 0, 0);
+
+    cap.toBlob(async (blob) => {
+        if (!blob) return;
+
+        setState('processing');
+
+        const formData = new FormData();
+        formData.append('image', blob, 'capture.jpg');
+        formData.append('location', LOCATION);
+
+        try {
+            const resp = await fetch(CHECKIN_URL, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': CSRF_TOKEN,
+                },
+                credentials: 'same-origin',
+                body: formData
+            });
+
+            const data = await resp.json();
+
+            if (data.recognized) {
+                showSuccess(data);
+            } else {
+                showFailure(data.error || 'Face not recognized.');
+            }
+        } catch (err) {
+            showFailure('Network error. Please check connection.');
+        }
+    }, 'image/jpeg', 0.92);
+}
+
+// ── State Management ──────────────────────────────────────
+function setState(state) {
+    currentState = state;
+    ['idle', 'processing', 'success', 'failure'].forEach(s => {
+        document.getElementById(`state-${s}`).classList.add('hidden');
+    });
+    document.getElementById(`state-${state}`).classList.remove('hidden');
+}
+
+function showSuccess(data) {
+    setState('success');
+    const att = data.attendance;
+    const usr = data.user;
+
+    document.getElementById('res-action').textContent = data.action === 'checked_in' ? '✅ Check-In Successful' : '✅ Check-Out Recorded';
+    document.getElementById('res-name').textContent = usr.name;
+    document.getElementById('res-empid').textContent = usr.employee_id;
+    document.getElementById('res-dept').textContent = usr.department || '—';
+    document.getElementById('res-time').textContent = att.check_in_time ? new Date('1970-01-01T' + att.check_in_time).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : '—';
+    document.getElementById('res-confidence').textContent = data.confidence + '%';
+
+    setStatus('<i class="ph ph-check-circle text-emerald-400"></i> Recognized', 'green');
+
+    let count = 5;
+    document.getElementById('cooldown-count').textContent = count;
+    cooldownTimer = setInterval(() => {
+        count--;
+        document.getElementById('cooldown-count').textContent = count;
+        if (count <= 0) {
+            clearInterval(cooldownTimer);
+            resetToIdle();
+        }
+    }, 1000);
+}
+
+function showFailure(msg) {
+    setState('failure');
+    document.getElementById('res-error').textContent = msg;
+    setStatus('<i class="ph ph-x-circle text-red-400"></i> ' + msg.substring(0, 40), 'red');
+
+    let count = 3;
+    document.getElementById('retry-count').textContent = count;
+    cooldownTimer = setInterval(() => {
+        count--;
+        document.getElementById('retry-count').textContent = count;
+        if (count <= 0) {
+            clearInterval(cooldownTimer);
+            resetToIdle();
+        }
+    }, 1000);
+}
+
+function resetToIdle() {
+    setState('idle');
+    setStatus('<i class="ph ph-circle text-yellow-400 animate-pulse"></i> Waiting for face…', 'default');
+}
+
+function setStatus(html, color) {
+    const el = document.getElementById('camera-status');
+    el.innerHTML = html;
+}
+
+// Start everything
+startCamera();
+</script>
+{% endblock %}

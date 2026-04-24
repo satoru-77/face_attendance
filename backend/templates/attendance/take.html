@@ -1,0 +1,242 @@
+{% extends 'base/base.html' %}
+{% block title %}Take Attendance — FaceTrack{% endblock %}
+{% block header_title %}Take Classroom Attendance{% endblock %}
+{% block nav_take %}active{% endblock %}
+
+{% block content %}
+<div class="grid grid-cols-1 lg:grid-cols-5 gap-6 h-full">
+
+    <!-- Camera Panel (Left 3/5) -->
+    <div class="lg:col-span-3 space-y-4">
+
+        <!-- Camera -->
+        <div class="card p-5">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="font-bold text-gray-800 flex items-center gap-2">
+                    <i class="ph ph-camera text-violet-500 text-xl"></i> Live Camera
+                </h3>
+                <div class="flex items-center gap-2">
+                    <div id="cam-indicator" class="w-2 h-2 rounded-full bg-gray-300"></div>
+                    <span id="cam-status-text" class="text-xs text-gray-500">Camera off</span>
+                </div>
+            </div>
+
+            <!-- Video feed -->
+            <div class="relative rounded-2xl overflow-hidden bg-gray-900" style="height: 380px;">
+                <video id="att-video" autoplay playsinline class="w-full h-full object-cover scale-x-[-1]"></video>
+                <canvas id="att-canvas" class="absolute inset-0 w-full h-full scale-x-[-1] pointer-events-none"></canvas>
+
+                <!-- Placeholder -->
+                <div id="vid-placeholder" class="absolute inset-0 flex flex-col items-center justify-center text-white/40 gap-3">
+                    <i class="ph ph-video-camera text-6xl"></i>
+                    <p class="text-lg font-medium">Click "Start Camera"</p>
+                    <p class="text-sm">Point at the class. Recognized students will be marked present.</p>
+                </div>
+
+                <!-- Processing overlay -->
+                <div id="processing-overlay" class="hidden absolute inset-0 bg-black/60 flex flex-col items-center justify-center gap-3 text-white">
+                    <svg class="w-12 h-12 animate-spin" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="white" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="white" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                    </svg>
+                    <p class="font-semibold text-lg">Recognizing faces…</p>
+                    <p id="proc-detail" class="text-sm opacity-70">Please wait</p>
+                </div>
+            </div>
+
+            <!-- Camera Controls -->
+            <div class="flex gap-3 mt-4">
+                <button id="start-btn" onclick="startCamera()"
+                    class="flex-1 py-3 bg-gray-900 text-white text-sm font-semibold rounded-xl hover:bg-gray-700 transition-colors flex items-center justify-center gap-2">
+                    <i class="ph ph-video-camera"></i> Start Camera
+                </button>
+                <button id="capture-att-btn" onclick="captureAndRecognize()" disabled
+                    class="flex-1 py-3 bg-violet-600 text-white text-sm font-bold rounded-xl hover:bg-violet-500 disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2">
+                    <i class="ph ph-scan"></i> Scan & Mark Attendance
+                </button>
+                <button onclick="stopCamera()"
+                    class="py-3 px-4 border border-gray-200 text-gray-500 text-sm rounded-xl hover:bg-gray-50 transition-colors">
+                    <i class="ph ph-x"></i>
+                </button>
+            </div>
+
+            <p class="text-xs text-gray-400 text-center mt-3">
+                Point the camera at the entire class, then click "Scan". All recognized faces will be marked present at once.
+            </p>
+        </div>
+
+        <!-- Result Summary -->
+        <div id="result-summary" class="hidden card p-5">
+            <h3 class="font-bold text-gray-800 mb-4 flex items-center gap-2">
+                <i class="ph-fill ph-check-circle text-emerald-500"></i> Scan Result
+            </h3>
+            <div class="grid grid-cols-3 gap-4 text-center mb-4">
+                <div class="bg-emerald-50 rounded-xl p-4">
+                    <p class="text-2xl font-black text-emerald-600" id="r-present">0</p>
+                    <p class="text-xs text-emerald-600">Marked Present</p>
+                </div>
+                <div class="bg-amber-50 rounded-xl p-4">
+                    <p class="text-2xl font-black text-amber-600" id="r-unknown">0</p>
+                    <p class="text-xs text-amber-600">Unknown Faces</p>
+                </div>
+                <div class="bg-gray-50 rounded-xl p-4">
+                    <p class="text-2xl font-black text-gray-600" id="r-total">0</p>
+                    <p class="text-xs text-gray-600">Faces Detected</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Results List Panel (Right 2/5) -->
+    <div class="lg:col-span-2">
+        <div class="card overflow-hidden h-full flex flex-col">
+            <div class="p-5 border-b border-gray-100 flex justify-between items-center">
+                <h3 class="font-bold text-gray-800">Recognized Today</h3>
+                <span id="present-badge" class="text-xs font-bold text-violet-600 bg-violet-50 px-3 py-1 rounded-full">0 present</span>
+            </div>
+
+            <div id="results-list" class="flex-1 overflow-y-auto divide-y divide-gray-50">
+                <div id="results-empty" class="flex flex-col items-center justify-center h-48 text-gray-400 text-sm gap-2">
+                    <i class="ph ph-users text-3xl text-gray-300"></i>
+                    <p>Scan the class to see who's present</p>
+                </div>
+            </div>
+
+            <div class="p-4 border-t border-gray-100">
+                <a href="{% url 'attendance' %}" class="btn-outline w-full justify-center">
+                    <i class="ph ph-list"></i> View All Records
+                </a>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<script>
+const CSRF  = '{{ csrf_token }}';
+const DEPT  = '{{ department.id|default:"" }}';
+const SCAN_URL      = '/api/attendance/classroom/';
+const CHECKIN_URL   = '/api/attendance/checkin/';
+
+let stream = null;
+let recognized = [];
+
+const video   = document.getElementById('att-video');
+const canvas  = document.getElementById('att-canvas');
+const ctx     = canvas.getContext('2d');
+
+// ── Camera ───────────────────────────────────────────────
+async function startCamera() {
+    document.getElementById('vid-placeholder').classList.add('hidden');
+    try {
+        stream = await navigator.mediaDevices.getUserMedia({
+            video: { width: { ideal: 1920 }, height: { ideal: 1080 }, facingMode: 'environment' },
+            audio: false
+        });
+        video.srcObject = stream;
+        video.onloadedmetadata = () => {
+            canvas.width  = video.videoWidth;
+            canvas.height = video.videoHeight;
+        };
+        document.getElementById('capture-att-btn').disabled = false;
+        document.getElementById('cam-indicator').classList.replace('bg-gray-300', 'bg-emerald-500');
+        document.getElementById('cam-status-text').textContent = 'Camera live';
+        document.getElementById('start-btn').innerHTML = '<i class="ph ph-check"></i> Camera Active';
+        document.getElementById('start-btn').disabled = true;
+    } catch (e) {
+        alert('Camera error: ' + e.message);
+    }
+}
+
+function stopCamera() {
+    if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
+    video.srcObject = null;
+    document.getElementById('vid-placeholder').classList.remove('hidden');
+    document.getElementById('capture-att-btn').disabled = true;
+    document.getElementById('cam-indicator').classList.replace('bg-emerald-500', 'bg-gray-300');
+    document.getElementById('cam-status-text').textContent = 'Camera off';
+    document.getElementById('start-btn').disabled = false;
+    document.getElementById('start-btn').innerHTML = '<i class="ph ph-video-camera"></i> Start Camera';
+}
+
+// ── Capture & Scan ───────────────────────────────────────
+async function captureAndRecognize() {
+    if (!stream) return;
+
+    // Draw current frame to canvas
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+    document.getElementById('processing-overlay').classList.remove('hidden');
+    document.getElementById('capture-att-btn').disabled = true;
+    document.getElementById('proc-detail').textContent = 'Detecting faces in frame…';
+
+    canvas.toBlob(async (blob) => {
+        const fd = new FormData();
+        fd.append('image', blob, 'classroom.jpg');
+        if (DEPT) fd.append('department_id', DEPT);
+
+        try {
+            const resp = await fetch(SCAN_URL, {
+                method: 'POST',
+                headers: { 'X-CSRFToken': CSRF },
+                credentials: 'same-origin',
+                body: fd
+            });
+            const data = await resp.json();
+
+            document.getElementById('processing-overlay').classList.add('hidden');
+            document.getElementById('capture-att-btn').disabled = false;
+
+            if (resp.ok) {
+                displayResults(data);
+            } else {
+                alert('Error: ' + (data.error || 'Unknown error'));
+            }
+        } catch (err) {
+            document.getElementById('processing-overlay').classList.add('hidden');
+            document.getElementById('capture-att-btn').disabled = false;
+            alert('Network error: ' + err.message);
+        }
+    }, 'image/jpeg', 0.95);
+}
+
+// ── Display Results ───────────────────────────────────────
+function displayResults(data) {
+    const present  = data.recognized_students || [];
+    const unknown  = data.unknown_faces || 0;
+    const detected = data.faces_detected || 0;
+
+    document.getElementById('result-summary').classList.remove('hidden');
+    document.getElementById('r-present').textContent = present.length;
+    document.getElementById('r-unknown').textContent  = unknown;
+    document.getElementById('r-total').textContent    = detected;
+    document.getElementById('present-badge').textContent = present.length + ' present';
+
+    const list = document.getElementById('results-list');
+    document.getElementById('results-empty').classList.add('hidden');
+
+    // Add new results (avoid duplicates)
+    present.forEach(student => {
+        if (!recognized.find(r => r.user_id === student.user_id)) {
+            recognized.push(student);
+            const div = document.createElement('div');
+            div.className = 'flex items-center gap-3 px-5 py-3 hover:bg-violet-50/30 transition-colors';
+            div.innerHTML = `
+                <div class="w-9 h-9 rounded-full bg-violet-100 text-violet-700 font-bold text-sm flex items-center justify-center shrink-0">
+                    ${student.name ? student.name[0].toUpperCase() : '?'}
+                </div>
+                <div class="flex-1 min-w-0">
+                    <p class="font-semibold text-gray-900 text-sm truncate">${student.name}</p>
+                    <p class="text-xs text-gray-400">${student.employee_id || ''}</p>
+                </div>
+                <div class="text-right shrink-0">
+                    <span class="text-xs font-bold text-emerald-600">${student.confidence}%</span>
+                    <span class="text-xs bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full block mt-0.5">Present</span>
+                </div>
+            `;
+            list.appendChild(div);
+        }
+    });
+}
+</script>
+{% endblock %}

@@ -1,0 +1,147 @@
+{% extends 'base/base.html' %}
+
+{% block title %}Attendance Records - FaceTrack{% endblock %}
+{% block header_title %}Attendance Records{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+
+    <!-- Filter Bar -->
+    <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
+        <form method="get" class="flex flex-wrap gap-3 items-end">
+            <div>
+                <label class="block text-xs font-medium text-gray-500 mb-1">Date</label>
+                <input type="date" name="date" value="{{ filters.date }}"
+                    class="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 outline-none">
+            </div>
+            <div class="flex-1 min-w-40">
+                <label class="block text-xs font-medium text-gray-500 mb-1">Search</label>
+                <div class="relative">
+                    <i class="ph ph-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
+                    <input type="text" name="search" value="{{ filters.search }}" placeholder="Name or ID…"
+                        class="pl-9 pr-3 py-2 w-full border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 outline-none">
+                </div>
+            </div>
+            <div>
+                <label class="block text-xs font-medium text-gray-500 mb-1">Department</label>
+                <select name="department" class="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 outline-none">
+                    <option value="">All Depts</option>
+                    {% for dept in departments %}
+                    <option value="{{ dept.id }}" {% if filters.department == dept.id|stringformat:"s" %}selected{% endif %}>{{ dept.code }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label class="block text-xs font-medium text-gray-500 mb-1">Status</label>
+                <select name="status" class="px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 outline-none">
+                    <option value="">All</option>
+                    <option value="PRESENT" {% if filters.status == 'PRESENT' %}selected{% endif %}>Present</option>
+                    <option value="LATE" {% if filters.status == 'LATE' %}selected{% endif %}>Late</option>
+                    <option value="ABSENT" {% if filters.status == 'ABSENT' %}selected{% endif %}>Absent</option>
+                </select>
+            </div>
+            <button type="submit" class="px-5 py-2 bg-primary-600 text-white text-sm font-medium rounded-lg hover:bg-primary-500 transition-colors">
+                Filter
+            </button>
+            <a href="{% url 'attendance' %}" class="px-5 py-2 bg-gray-100 text-gray-600 text-sm font-medium rounded-lg hover:bg-gray-200 transition-colors">
+                Reset
+            </a>
+        </form>
+    </div>
+
+    <!-- Summary Stats -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-5 text-center">
+            <p class="text-2xl font-bold text-gray-900">{{ total_users }}</p>
+            <p class="text-xs text-gray-500 mt-1">Total Users</p>
+        </div>
+        <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-5 text-center">
+            <p class="text-2xl font-bold text-emerald-600">{{ present_count }}</p>
+            <p class="text-xs text-gray-500 mt-1">Present</p>
+        </div>
+        <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-5 text-center">
+            <p class="text-2xl font-bold text-amber-600">{{ late_count }}</p>
+            <p class="text-xs text-gray-500 mt-1">Late</p>
+        </div>
+        <div class="bg-white rounded-xl border border-gray-100 shadow-sm p-5 text-center">
+            <p class="text-2xl font-bold text-red-600">{{ absent_count }}</p>
+            <p class="text-xs text-gray-500 mt-1">Absent</p>
+        </div>
+    </div>
+
+    <!-- Records Table -->
+    <div class="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+        <div class="p-5 border-b border-gray-100 flex items-center justify-between">
+            <h3 class="font-semibold text-gray-800">
+                Records for {{ report_date|date:"l, F j, Y" }}
+            </h3>
+            <a href="/api/attendance/report/export/?date_from={{ filters.date }}&date_to={{ filters.date }}" 
+               class="text-sm font-medium text-primary-600 hover:text-primary-700 flex items-center gap-1">
+                <i class="ph ph-file-csv"></i> Export CSV
+            </a>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="w-full text-left">
+                <thead>
+                    <tr class="bg-gray-50 text-gray-500 text-xs uppercase tracking-wider">
+                        <th class="px-6 py-3 font-medium">User</th>
+                        <th class="px-6 py-3 font-medium">Department</th>
+                        <th class="px-6 py-3 font-medium">Check-in</th>
+                        <th class="px-6 py-3 font-medium">Check-out</th>
+                        <th class="px-6 py-3 font-medium">Mode</th>
+                        <th class="px-6 py-3 font-medium">Confidence</th>
+                        <th class="px-6 py-3 font-medium">Status</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-50 text-sm">
+                    {% for record in records %}
+                    <tr class="hover:bg-gray-50 transition-colors">
+                        <td class="px-6 py-4">
+                            <div class="flex items-center gap-3">
+                                <div class="w-8 h-8 rounded-full bg-primary-100 text-primary-700 flex items-center justify-center font-bold text-xs shrink-0">
+                                    {{ record.user.first_name|first|default:record.user.username|first|upper }}
+                                </div>
+                                <div>
+                                    <p class="font-medium text-gray-900">{{ record.user.get_full_name }}</p>
+                                    <p class="text-xs text-gray-500">{{ record.user.profile.employee_id }}</p>
+                                </div>
+                            </div>
+                        </td>
+                        <td class="px-6 py-4 text-gray-600">{{ record.user.profile.department.name|default:"—" }}</td>
+                        <td class="px-6 py-4 font-medium text-gray-800">{{ record.check_in_time|time:"H:i A"|default:"—" }}</td>
+                        <td class="px-6 py-4 text-gray-600">{{ record.check_out_time|time:"H:i A"|default:"—" }}</td>
+                        <td class="px-6 py-4">
+                            <span class="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded font-medium">{{ record.attendance_mode }}</span>
+                        </td>
+                        <td class="px-6 py-4">
+                            <div class="flex items-center gap-2">
+                                <div class="w-12 bg-gray-100 rounded-full h-1.5">
+                                    <div class="bg-primary-500 h-1.5 rounded-full" style="width: {{ record.confidence_score }}%"></div>
+                                </div>
+                                <span class="text-xs text-gray-500">{{ record.confidence_score|floatformat:0 }}%</span>
+                            </div>
+                        </td>
+                        <td class="px-6 py-4">
+                            {% if record.status == 'PRESENT' %}
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">Present</span>
+                            {% elif record.status == 'LATE' %}
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">Late</span>
+                            {% else %}
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">{{ record.status }}</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="7" class="px-6 py-10 text-center text-gray-400">
+                            <i class="ph ph-calendar-blank text-3xl mb-2"></i>
+                            <p>No records found for this date.</p>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

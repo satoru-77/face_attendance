@@ -1,0 +1,291 @@
+{% extends 'base/base.html' %}
+{% block title %}{{ student.get_full_name }} — FaceTrack{% endblock %}
+{% block header_title %}{{ student.get_full_name }}{% endblock %}
+{% block header_sub %}{{ student.profile.employee_id }} · {{ student.profile.department.name|default:"—" }}{% endblock %}
+{% block nav_students %}active{% endblock %}
+
+{% block header_actions %}
+{% if not student.profile.is_face_enrolled %}
+<a href="?enroll=1" class="btn btn-orange">
+    <i class="ph ph-camera" style="font-size:14px;"></i> Enroll Face
+</a>
+{% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="grid grid-cols-1 lg:grid-cols-5 gap-5">
+
+    <!-- Left: info + face enroll (2 cols) -->
+    <div class="lg:col-span-2 space-y-4">
+
+        <!-- Profile Card -->
+        <div class="card p-5 text-center">
+            <div class="w-16 h-16 rounded-full mx-auto mb-3 flex items-center justify-center text-2xl font-black text-white"
+                 style="background: linear-gradient(135deg, #f97316, #ea580c);">
+                {{ student.first_name|first|upper }}
+            </div>
+            <h2 class="font-bold text-gray-900 text-lg">{{ student.get_full_name }}</h2>
+            <p class="font-mono text-xs text-gray-400 mt-0.5">{{ student.profile.employee_id }}</p>
+
+            <div class="mt-4 pt-4 border-t border-gray-100 space-y-2.5 text-sm text-left">
+                <div class="flex justify-between">
+                    <span class="text-gray-400 text-xs uppercase tracking-wide font-semibold">Department</span>
+                    <span class="font-medium text-gray-700 text-xs">{{ student.profile.department.name|default:"—" }}</span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-gray-400 text-xs uppercase tracking-wide font-semibold">Email</span>
+                    <span class="font-medium text-gray-700 text-xs">{{ student.email|default:"—" }}</span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-gray-400 text-xs uppercase tracking-wide font-semibold">Phone</span>
+                    <span class="font-medium text-gray-700 text-xs">{{ student.profile.phone|default:"—" }}</span>
+                </div>
+                <div class="flex justify-between items-center">
+                    <span class="text-gray-400 text-xs uppercase tracking-wide font-semibold">Face Status</span>
+                    {% if student.profile.is_face_enrolled %}
+                    <span class="badge badge-present"><i class="ph ph-check-circle"></i> Enrolled</span>
+                    {% else %}
+                    <span class="badge badge-absent"><i class="ph ph-warning-circle"></i> Pending</span>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Face Enrollment Card -->
+        <div class="card overflow-hidden">
+            <div class="px-5 py-3.5 border-b border-gray-100 flex items-center justify-between cursor-pointer"
+                 onclick="toggleEnroll()" style="background: {% if enroll_mode %}#fff7ed{% else %}white{% endif %}">
+                <h3 class="font-semibold text-gray-900 text-sm flex items-center gap-2">
+                    <i class="ph ph-camera {% if student.profile.is_face_enrolled %}text-green-500{% else %}text-orange-500{% endif %}" style="font-size:16px;"></i>
+                    {% if student.profile.is_face_enrolled %}Re-train Face{% else %}Train Face Recognition{% endif %}
+                </h3>
+                <i class="ph ph-caret-{% if enroll_mode %}up{% else %}down{% endif %} text-gray-400" id="caret" style="font-size:14px;"></i>
+            </div>
+
+            <div id="enroll-body" class="{% if not enroll_mode %}hidden{% endif %}">
+                <div class="p-4 space-y-3">
+                    <!-- Progress -->
+                    <div>
+                        <div class="flex justify-between text-xs text-gray-500 mb-1">
+                            <span id="prog-label">Ready to capture</span>
+                            <span id="prog-pct" class="font-bold">0/10</span>
+                        </div>
+                        <div class="w-full bg-gray-100 rounded-full h-2">
+                            <div id="prog-bar" class="h-2 rounded-full transition-all duration-400"
+                                 style="width:0%; background:linear-gradient(90deg,#f97316,#ea580c);"></div>
+                        </div>
+                    </div>
+
+                    <!-- Pose hint -->
+                    <div id="pose-hint" class="px-3 py-2 rounded text-xs font-medium text-orange-700 flex items-center gap-1.5"
+                         style="background:#fff7ed; border:1px solid #fed7aa;">
+                        <i class="ph ph-camera-rotate shrink-0"></i>
+                        <span>Photo 1 — Look straight at the camera</span>
+                    </div>
+
+                    <!-- Camera -->
+                    <div class="relative rounded overflow-hidden bg-gray-900" style="height:200px;">
+                        <video id="enroll-video" autoplay playsinline class="w-full h-full object-cover scale-x-[-1]"></video>
+                        <div id="enroll-idle" class="absolute inset-0 flex flex-col items-center justify-center gap-2 text-white/40">
+                            <i class="ph ph-camera" style="font-size:32px;"></i>
+                            <p class="text-xs">Click "Start Camera"</p>
+                        </div>
+                        <div id="flash" class="absolute inset-0 bg-white opacity-0 pointer-events-none"></div>
+                    </div>
+
+                    <!-- Thumbnails -->
+                    <div class="flex gap-1">
+                        {% for i in "1234567890" %}
+                        <div id="t{{ forloop.counter }}"
+                             class="flex-1 rounded overflow-hidden border-2 border-gray-200 flex items-center justify-center text-xs text-gray-400 font-bold"
+                             style="height:28px;">{{ forloop.counter }}</div>
+                        {% endfor %}
+                    </div>
+
+                    <!-- Buttons -->
+                    <button id="btn-cam" onclick="startEnrollCam()"
+                        class="btn btn-ghost w-full justify-center text-xs py-2">
+                        <i class="ph ph-video-camera" style="font-size:13px;"></i> Start Camera
+                    </button>
+
+                    <button id="btn-capture" onclick="capturePhoto()" disabled
+                        class="btn w-full justify-center py-2.5 text-sm"
+                        style="background:#f97316; color:white; opacity:0.4; cursor:not-allowed;">
+                        <i class="ph ph-camera" style="font-size:14px;"></i>
+                        Capture (<span id="cap-n">0</span>/10)
+                    </button>
+
+                    <button id="btn-finish" onclick="finishTraining()"
+                        class="btn hidden w-full justify-center py-2.5 text-sm"
+                        style="background:#16a34a; color:white;">
+                        <i class="ph ph-check" style="font-size:14px;"></i> Save & Train Model ✓
+                    </button>
+
+                    <div id="training-spin" class="hidden text-center py-4">
+                        <div class="w-8 h-8 border-4 border-orange-200 border-t-orange-500 rounded-full animate-spin mx-auto mb-2"></div>
+                        <p class="text-xs text-gray-500 font-medium">Training face model… please wait</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Right: Attendance History (3 cols) -->
+    <div class="lg:col-span-3">
+        <div class="card overflow-hidden">
+            <div class="px-5 py-4 border-b border-gray-100 flex items-center gap-2">
+                <i class="ph ph-calendar-check text-orange-400" style="font-size:16px;"></i>
+                <h3 class="font-semibold text-gray-900 text-sm">Attendance History</h3>
+            </div>
+            <table class="w-full text-sm">
+                <thead>
+                    <tr class="text-xs uppercase tracking-wide text-gray-400 bg-gray-50 border-b border-gray-100">
+                        <th class="px-5 py-2.5 text-left font-semibold">Date</th>
+                        <th class="px-5 py-2.5 text-left font-semibold">Check-in</th>
+                        <th class="px-5 py-2.5 text-left font-semibold">Mode</th>
+                        <th class="px-5 py-2.5 text-left font-semibold">Status</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-50">
+                    {% for rec in recent_attendance %}
+                    <tr class="hover:bg-gray-50 transition-colors">
+                        <td class="px-5 py-3 font-medium text-gray-800">{{ rec.date|date:"d M Y" }}</td>
+                        <td class="px-5 py-3 font-mono text-gray-600 text-xs">{{ rec.check_in_time|time:"H:i A"|default:"—" }}</td>
+                        <td class="px-5 py-3">
+                            <span class="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded font-medium">{{ rec.attendance_mode }}</span>
+                        </td>
+                        <td class="px-5 py-3">
+                            {% if rec.status == 'PRESENT' %}<span class="badge badge-present">Present</span>
+                            {% elif rec.status == 'LATE' %}<span class="badge badge-late">Late</span>
+                            {% else %}<span class="badge badge-absent">{{ rec.status }}</span>{% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="4" class="px-5 py-8 text-center text-gray-400 text-sm">
+                            No attendance records yet.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+const CSRF = '{{ csrf_token }}';
+const USER_ID = {{ student.pk }};
+const POSES = [
+    'Photo 1 — Look straight, neutral face',
+    'Photo 2 — Smile naturally',
+    'Photo 3 — Turn head slightly left',
+    'Photo 4 — Turn head slightly right',
+    'Photo 5 — Tilt head slightly up',
+    'Photo 6 — Tilt head slightly down',
+    'Photo 7 — Serious expression, straight',
+    'Photo 8 — Turn head left ~30°',
+    'Photo 9 — Turn head right ~30°',
+    'Photo 10 — Final photo, look straight',
+];
+let photos = [], idx = 0, stream = null;
+const video = document.getElementById('enroll-video');
+
+function toggleEnroll() {
+    const b = document.getElementById('enroll-body');
+    const c = document.getElementById('caret');
+    b.classList.toggle('hidden');
+    c.className = b.classList.contains('hidden') ? 'ph ph-caret-down text-gray-400' : 'ph ph-caret-up text-gray-400';
+}
+
+async function startEnrollCam() {
+    document.getElementById('enroll-idle').style.display = 'none';
+    try {
+        stream = await navigator.mediaDevices.getUserMedia({ video: { width: 1280, height: 720 } });
+        video.srcObject = stream;
+        document.getElementById('btn-capture').disabled = false;
+        document.getElementById('btn-capture').style.opacity = '1';
+        document.getElementById('btn-capture').style.cursor = 'pointer';
+        document.getElementById('btn-cam').innerHTML = '<i class="ph ph-check" style="font-size:13px;"></i> Camera Active';
+        document.getElementById('btn-cam').disabled = true;
+    } catch(e) { alert('Camera error: ' + e.message); }
+}
+
+function capturePhoto() {
+    if (!stream || idx >= 10) return;
+    const cap = document.createElement('canvas');
+    cap.width = video.videoWidth; cap.height = video.videoHeight;
+    cap.getContext('2d').drawImage(video, 0, 0);
+
+    const fl = document.getElementById('flash');
+    fl.style.opacity = '0.9'; setTimeout(() => fl.style.opacity = '0', 100);
+
+    cap.toBlob(blob => {
+        photos.push(blob);
+        idx++;
+        const thumb = document.getElementById('t' + idx);
+        const url = URL.createObjectURL(blob);
+        thumb.innerHTML = `<img src="${url}" class="w-full h-full object-cover">`;
+        thumb.style.borderColor = '#f97316';
+
+        const pct = Math.round(idx / 10 * 100);
+        document.getElementById('prog-bar').style.width = pct + '%';
+        document.getElementById('prog-pct').textContent = idx + '/10';
+        document.getElementById('prog-label').textContent = idx < 10 ? 'Photo ' + (idx+1) + ' of 10' : 'All 10 captured!';
+        if (idx < 10) {
+            document.getElementById('pose-hint').querySelector('span').textContent = POSES[idx];
+        }
+        document.getElementById('cap-n').textContent = idx;
+
+        if (idx >= 10) {
+            document.getElementById('btn-capture').classList.add('hidden');
+            document.getElementById('btn-finish').classList.remove('hidden');
+        }
+    }, 'image/jpeg', 0.92);
+}
+
+async function finishTraining() {
+    document.getElementById('btn-finish').classList.add('hidden');
+    document.getElementById('training-spin').classList.remove('hidden');
+
+    await fetch('/api/face/enroll/start/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+        credentials: 'same-origin',
+        body: JSON.stringify({ user_id: USER_ID })
+    });
+
+    for (let i = 0; i < photos.length; i++) {
+        const fd = new FormData();
+        fd.append('user_id', USER_ID);
+        fd.append('photo_number', i + 1);
+        fd.append('image', photos[i], 'photo_' + (i+1) + '.jpg');
+        const r = await fetch('/api/face/enroll/photo/', {
+            method: 'POST', headers: { 'X-CSRFToken': CSRF },
+            credentials: 'same-origin', body: fd
+        });
+        if (!r.ok) {
+            const d = await r.json();
+            alert('Error on photo ' + (i+1) + ': ' + d.error);
+            document.getElementById('training-spin').classList.add('hidden');
+            return;
+        }
+    }
+
+    const cr = await fetch('/api/face/enroll/complete/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+        credentials: 'same-origin',
+        body: JSON.stringify({ user_id: USER_ID })
+    });
+    const cd = await cr.json();
+    if (cr.ok) {
+        alert('✅ ' + cd.message);
+        location.reload();
+    } else {
+        alert('❌ ' + cd.error);
+        document.getElementById('training-spin').classList.add('hidden');
+    }
+}
+</script>
+{% endblock %}

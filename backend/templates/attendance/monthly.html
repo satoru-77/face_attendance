@@ -1,0 +1,95 @@
+{% extends 'base/base.html' %}
+{% block title %}Monthly Report — FaceTrack{% endblock %}
+{% block header_title %}Monthly Attendance Report{% endblock %}
+{% block nav_report %}active{% endblock %}
+
+{% block content %}
+<div class="space-y-5">
+    <!-- Filters -->
+    <div class="card p-4">
+        <form method="get" class="flex flex-wrap gap-3 items-end">
+            <div>
+                <label class="block text-xs font-medium text-gray-500 mb-1.5">Month</label>
+                <select name="month" class="px-3.5 py-2.5 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-violet-500 outline-none">
+                    {% for m_num, m_name in month_names %}
+                    <option value="{{ m_num }}" {% if m_num == month %}selected{% endif %}>{{ m_name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label class="block text-xs font-medium text-gray-500 mb-1.5">Year</label>
+                <select name="year" class="px-3.5 py-2.5 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-violet-500 outline-none">
+                    {% for y in year_range %}
+                    <option value="{{ y }}" {% if y == year %}selected{% endif %}>{{ y }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <button type="submit" class="btn-primary">Generate</button>
+        </form>
+    </div>
+
+    <!-- Summary -->
+    <div class="card p-5 flex items-center gap-8">
+        <div class="text-center px-6 border-r border-gray-100">
+            <p class="text-xl font-bold text-gray-900">{{ month_name }} {{ year }}</p>
+            <p class="text-xs text-gray-500">Reporting Period</p>
+        </div>
+        <div class="text-center px-6 border-r border-gray-100">
+            <p class="text-2xl font-black text-violet-600">{{ working_days }}</p>
+            <p class="text-xs text-gray-500">Working Days</p>
+        </div>
+        <div class="text-center px-6">
+            <p class="text-2xl font-black text-gray-800">{{ rows|length }}</p>
+            <p class="text-xs text-gray-500">Students</p>
+        </div>
+    </div>
+
+    <!-- Table -->
+    <div class="card overflow-hidden">
+        <table class="w-full text-sm">
+            <thead>
+                <tr class="bg-gray-50/80 text-gray-500 text-xs uppercase tracking-wider border-b border-gray-100">
+                    <th class="px-6 py-3 text-left font-medium">Student</th>
+                    <th class="px-6 py-3 text-center font-medium">Present</th>
+                    <th class="px-6 py-3 text-center font-medium">Late</th>
+                    <th class="px-6 py-3 text-center font-medium">Absent</th>
+                    <th class="px-6 py-3 text-left font-medium">Attendance %</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-50">
+                {% for row in rows %}
+                <tr class="hover:bg-violet-50/30 transition-colors">
+                    <td class="px-6 py-4">
+                        <div class="flex items-center gap-3">
+                            <div class="w-8 h-8 rounded-full bg-violet-100 text-violet-700 font-bold text-xs flex items-center justify-center shrink-0">
+                                {{ row.student.first_name|first|upper }}
+                            </div>
+                            <div>
+                                <p class="font-semibold text-gray-900">{{ row.student.get_full_name }}</p>
+                                <p class="text-xs text-gray-400 font-mono">{{ row.employee_id }}</p>
+                            </div>
+                        </div>
+                    </td>
+                    <td class="px-6 py-4 text-center font-bold text-emerald-600">{{ row.present }}</td>
+                    <td class="px-6 py-4 text-center font-bold text-amber-600">{{ row.late }}</td>
+                    <td class="px-6 py-4 text-center font-bold text-red-600">{{ row.absent }}</td>
+                    <td class="px-6 py-4 min-w-40">
+                        <div class="flex items-center gap-3">
+                            <div class="flex-1 bg-gray-100 rounded-full h-2">
+                                <div class="h-2 rounded-full {% if row.percentage >= 75 %}bg-emerald-500{% elif row.percentage >= 50 %}bg-amber-500{% else %}bg-red-500{% endif %}"
+                                     style="width:{{ row.percentage }}%"></div>
+                            </div>
+                            <span class="text-xs font-bold w-10 text-right {% if row.percentage >= 75 %}text-emerald-600{% elif row.percentage >= 50 %}text-amber-600{% else %}text-red-600{% endif %}">{{ row.percentage }}%</span>
+                        </div>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="5" class="px-6 py-10 text-center text-gray-400">No data for this period.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

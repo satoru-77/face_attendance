@@ -1,0 +1,486 @@
+{% extends 'base/base.html' %}
+{% block title %}Dashboard — FaceTrack{% endblock %}
+{% block header_title %}Attendance Dashboard{% endblock %}
+{% block header_sub %}{{ my_department.name|default:"All Departments" }} · {{ today|date:"l, d F Y" }}{% endblock %}
+{% block nav_dash %}active{% endblock %}
+
+{% block extra_head %}<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>{% endblock %}
+
+{% block content %}
+<div class="grid grid-cols-1 xl:grid-cols-5 gap-5">
+
+    <!-- ════════════════════════════════════════════════════
+         LEFT — CAMERA + FACE CAPTURE (3 cols)
+    ════════════════════════════════════════════════════ -->
+    <div class="xl:col-span-3 space-y-4">
+
+        <!-- Camera Card -->
+        <div class="card overflow-hidden">
+            <!-- Card Header -->
+            <div class="px-5 py-4 border-b border-gray-100 flex items-center justify-between" style="background: linear-gradient(90deg, #fff7ed 0%, #ffffff 100%);">
+                <div class="flex items-center gap-3">
+                    <div class="w-9 h-9 rounded flex items-center justify-center" style="background:#16a34a;">
+                        <i class="ph-fill ph-camera text-white" style="font-size:18px;"></i>
+                    </div>
+                    <div>
+                        <h2 class="font-bold text-gray-900 text-sm">Live Face Capture</h2>
+                        <p class="text-xs text-gray-400">Point camera at class — recognized students marked present automatically</p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span id="cam-dot" class="w-2 h-2 rounded-full bg-gray-300"></span>
+                    <span id="cam-label" class="text-xs text-gray-400">Camera off</span>
+                </div>
+            </div>
+
+            <!-- Video Area -->
+            <div class="relative bg-gray-950" style="height:340px;">
+                <video id="capture-video" autoplay playsinline class="w-full h-full object-cover scale-x-[-1]"></video>
+                <canvas id="capture-canvas" class="absolute inset-0 w-full h-full scale-x-[-1] pointer-events-none" style="display:none;"></canvas>
+
+                <!-- Idle state -->
+                <div id="cam-idle" class="absolute inset-0 flex flex-col items-center justify-center gap-4 text-white/50">
+                    <div class="w-20 h-20 rounded-full border-2 border-dashed border-white/20 flex items-center justify-center">
+                        <i class="ph ph-camera" style="font-size:36px;"></i>
+                    </div>
+                    <p class="text-sm font-medium">Click <strong class="text-white/70">"Start Camera"</strong> to begin</p>
+                </div>
+
+                <!-- Scanning overlay -->
+                <div id="scan-overlay" class="hidden absolute inset-0 flex flex-col items-center justify-center gap-3" style="background:rgba(0,0,0,0.55);">
+                    <div class="w-12 h-12 border-4 border-white/20 border-t-green-400 rounded-full animate-spin"></div>
+                    <p class="text-white font-semibold text-sm">Scanning faces…</p>
+                    <p class="text-white/60 text-xs" id="scan-detail">Processing image</p>
+                </div>
+
+                <!-- Live face bounding boxes drawn by canvas overlay -->
+
+                <!-- Bottom control bar inside video -->
+                <div class="absolute bottom-0 inset-x-0 px-4 py-3 flex items-center gap-3" style="background: linear-gradient(to top, rgba(0,0,0,0.7), transparent);">
+                    <button id="btn-start-cam" onclick="startCamera()"
+                        class="btn btn-ghost text-white border-white/30 hover:bg-white/10 text-xs">
+                        <i class="ph ph-video-camera" style="font-size:14px;"></i> Start Camera
+                    </button>
+
+                    <button id="btn-scan" onclick="scanFaces()" disabled
+                        class="btn btn-green btn-lg flex-1 justify-center text-sm"
+                        style="opacity:0.4; cursor:not-allowed;">
+                        <i class="ph ph-scan" style="font-size:16px;"></i>
+                        Capture &amp; Mark Attendance
+                    </button>
+
+                    <button onclick="stopCamera()" class="btn btn-ghost text-white border-white/30 hover:bg-white/10 text-xs">
+                        <i class="ph ph-x" style="font-size:14px;"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recognized Students Results -->
+        <div class="card">
+            <div class="px-5 py-3.5 border-b border-gray-100 flex items-center justify-between">
+                <h3 class="font-semibold text-gray-900 text-sm flex items-center gap-2">
+                    <i class="ph ph-check-circle text-green-500" style="font-size:16px;"></i>
+                    Recognized Students
+                </h3>
+                <span id="present-count" class="badge badge-present">0 present</span>
+            </div>
+
+            <div id="results-area" class="divide-y divide-gray-50 max-h-64 overflow-y-auto">
+                <div id="results-empty" class="px-5 py-8 text-center text-gray-400">
+                    <i class="ph ph-users" style="font-size:28px; display:block; margin-bottom:8px; color:#d1d5db;"></i>
+                    <p class="text-sm">Students will appear here after scanning</p>
+                </div>
+            </div>
+
+            <div id="scan-summary" class="hidden px-5 py-3 bg-gray-50 border-t border-gray-100 flex items-center gap-6 text-xs font-medium">
+                <span class="text-green-700 flex items-center gap-1">
+                    <i class="ph ph-check-circle"></i>
+                    <span id="s-present">0</span> Present
+                </span>
+                <span class="text-amber-600 flex items-center gap-1">
+                    <i class="ph ph-warning-circle"></i>
+                    <span id="s-unknown">0</span> Unknown
+                </span>
+                <span class="text-gray-500 flex items-center gap-1">
+                    <i class="ph ph-scan"></i>
+                    <span id="s-total">0</span> Faces detected
+                </span>
+                <button onclick="scanFaces()" class="ml-auto btn btn-ghost text-xs py-1">
+                    <i class="ph ph-arrow-clockwise"></i> Re-scan
+                </button>
+            </div>
+        </div>
+
+        <!-- 7-Day Trend (moved from right) -->
+        <div class="card p-5">
+            <h3 class="font-semibold text-gray-900 text-sm mb-3 flex items-center gap-2">
+                <i class="ph ph-trend-up text-orange-400" style="font-size:16px;"></i>
+                Attendance — Last 7 Days
+            </h3>
+            <div style="height:130px;">
+                <canvas id="week-chart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════
+         RIGHT — CLASS SELECTOR + STATS (2 cols)
+    ════════════════════════════════════════════════════ -->
+    <div class="xl:col-span-2 space-y-4">
+
+        <!-- Class / Subject Selector -->
+        <div class="card p-5">
+            <h3 class="font-bold text-gray-900 text-sm mb-3 flex items-center gap-2">
+                <i class="ph ph-chalkboard-teacher text-brand-500" style="font-size:18px;"></i>
+                Select Class
+            </h3>
+            <div class="space-y-2.5">
+                <div>
+                    <label class="block text-xs font-semibold text-gray-500 mb-1.5 uppercase tracking-wide">Subject / Class</label>
+                    <select id="class-subject" class="input">
+                        <option value="">— Choose class —</option>
+                        <option value="CS101">CS101 — Programming Fundamentals</option>
+                        <option value="CS201">CS201 — Data Structures</option>
+                        <option value="CS301">CS301 — Algorithms</option>
+                        <option value="CS401">CS401 — Database Systems</option>
+                        <option value="MCA101">MCA101 — Advanced Programming</option>
+                        <option value="MCA201">MCA201 — Software Engineering</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-gray-500 mb-1.5 uppercase tracking-wide">Date</label>
+                    <input type="date" id="att-date" class="input" value="{{ today|date:'Y-m-d' }}">
+                </div>
+                <div class="pt-1">
+                    <div class="flex items-center gap-2 p-3 rounded border border-orange-100 bg-orange-50 text-xs text-orange-700">
+                        <i class="ph ph-info" style="font-size:14px; shrink:0;"></i>
+                        Select a class before scanning to log attendance correctly.
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Capture Session Stats — updates live -->
+        <div class="card overflow-hidden">
+            <!-- Header with class name -->
+            <div class="px-5 py-3 border-b border-gray-100 flex items-center justify-between" style="background:#fff7ed;">
+                <h3 class="font-bold text-gray-900 text-sm flex items-center gap-2">
+                    <i class="ph ph-presentation-chart text-orange-500" style="font-size:17px;"></i>
+                    Capture Details
+                </h3>
+                <span id="session-class-badge" class="text-xs font-semibold text-orange-600 bg-white border border-orange-200 px-2.5 py-0.5 rounded">No class selected</span>
+            </div>
+
+            <!-- Big stat row -->
+            <div class="grid grid-cols-3 divide-x divide-gray-100">
+                <div class="p-4 text-center">
+                    <p class="text-3xl font-black text-gray-900" id="stat-total">{{ total_students }}</p>
+                    <p class="text-xs text-gray-400 mt-1 font-semibold uppercase tracking-wide">In Class</p>
+                </div>
+                <div class="p-4 text-center" style="background:#f0fdf4;">
+                    <p class="text-3xl font-black text-green-600" id="stat-present">0</p>
+                    <p class="text-xs text-green-600 mt-1 font-semibold uppercase tracking-wide">Present</p>
+                </div>
+                <div class="p-4 text-center" style="background:#fef2f2;">
+                    <p class="text-3xl font-black text-red-500" id="stat-absent">{{ total_students }}</p>
+                    <p class="text-xs text-red-400 mt-1 font-semibold uppercase tracking-wide">Absent</p>
+                </div>
+            </div>
+
+            <!-- Progress bar -->
+            <div class="px-5 pb-4 pt-3">
+                <div class="flex justify-between text-xs text-gray-400 mb-1.5">
+                    <span>Attendance Rate</span>
+                    <span class="font-bold text-gray-700" id="stat-rate">0%</span>
+                </div>
+                <div class="w-full bg-gray-100 rounded-full h-2.5" style="overflow:hidden;">
+                    <div id="stat-bar" class="h-2.5 rounded-full transition-all duration-700"
+                         style="width:0%; background: linear-gradient(90deg,#16a34a,#15803d);"></div>
+                </div>
+            </div>
+
+            <!-- Faces detected row -->
+            <div class="px-5 pb-4 flex items-center gap-4 text-xs">
+                <span class="flex items-center gap-1.5 text-gray-500">
+                    <i class="ph ph-scan text-gray-400"></i>
+                    Faces detected: <strong id="stat-detected" class="text-gray-700">—</strong>
+                </span>
+                <span class="flex items-center gap-1.5 text-amber-600">
+                    <i class="ph ph-question text-amber-400"></i>
+                    Unknown: <strong id="stat-unknown">—</strong>
+                </span>
+            </div>
+
+            <!-- Not-yet-scanned hint -->
+            <div id="stat-hint" class="px-5 pb-4">
+                <div class="flex items-center gap-2 p-2.5 rounded text-xs text-gray-500 bg-gray-50 border border-gray-100">
+                    <i class="ph ph-arrow-circle-up text-orange-400" style="font-size:14px;"></i>
+                    Click <strong>Capture &amp; Mark Attendance</strong> to update these numbers
+                </div>
+            </div>
+        </div>
+
+        </div>
+</div>
+
+<!-- Recent Check-ins -->
+<div class="card mt-5 overflow-hidden">
+    <div class="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+        <h3 class="font-semibold text-gray-900 text-sm flex items-center gap-2">
+            <i class="ph ph-clock-counter-clockwise text-gray-400" style="font-size:16px;"></i>
+            Recent Check-ins Today
+        </h3>
+        <a href="{% url 'attendance' %}" class="text-xs font-semibold text-orange-500 hover:text-orange-600 flex items-center gap-1">
+            View All <i class="ph ph-arrow-right" style="font-size:12px;"></i>
+        </a>
+    </div>
+    <table class="w-full text-sm">
+        <thead>
+            <tr class="text-xs uppercase tracking-wide text-gray-400 bg-gray-50 border-b border-gray-100">
+                <th class="px-5 py-2.5 text-left font-semibold">Student</th>
+                <th class="px-5 py-2.5 text-left font-semibold">Roll No.</th>
+                <th class="px-5 py-2.5 text-left font-semibold">Time</th>
+                <th class="px-5 py-2.5 text-left font-semibold">Confidence</th>
+                <th class="px-5 py-2.5 text-left font-semibold">Status</th>
+            </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-50">
+            {% for rec in recent_checkins %}
+            <tr class="hover:bg-gray-50 transition-colors">
+                <td class="px-5 py-3">
+                    <div class="flex items-center gap-2.5">
+                        <div class="w-7 h-7 rounded bg-orange-100 text-orange-700 font-bold text-xs flex items-center justify-center shrink-0">
+                            {{ rec.user.first_name|first|upper }}
+                        </div>
+                        <span class="font-medium text-gray-900">{{ rec.user.get_full_name }}</span>
+                    </div>
+                </td>
+                <td class="px-5 py-3 font-mono text-xs text-gray-500">{{ rec.user.profile.employee_id }}</td>
+                <td class="px-5 py-3 text-gray-700 font-medium">{{ rec.check_in_time|time:"H:i A" }}</td>
+                <td class="px-5 py-3">
+                    <div class="flex items-center gap-2">
+                        <div class="w-12 bg-gray-100 rounded-full h-1.5">
+                            <div class="bg-orange-400 h-1.5 rounded-full" style="width:{{ rec.confidence_score }}%"></div>
+                        </div>
+                        <span class="text-xs text-gray-500">{{ rec.confidence_score|floatformat:0 }}%</span>
+                    </div>
+                </td>
+                <td class="px-5 py-3">
+                    {% if rec.status == 'PRESENT' %}<span class="badge badge-present">Present</span>
+                    {% elif rec.status == 'LATE' %}<span class="badge badge-late">Late</span>
+                    {% else %}<span class="badge badge-absent">{{ rec.status }}</span>{% endif %}
+                </td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="5" class="px-5 py-8 text-center text-gray-400 text-sm">
+                    No check-ins recorded today yet.
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+const CSRF     = '{{ csrf_token }}';
+const SCAN_URL = '/api/attendance/classroom/';
+let stream = null, recognized = [], scanCount = 0;
+
+const video   = document.getElementById('capture-video');
+const btnScan = document.getElementById('btn-scan');
+const btnCam  = document.getElementById('btn-start-cam');
+
+/* ── Camera ─── */
+async function startCamera() {
+    try {
+        stream = await navigator.mediaDevices.getUserMedia({
+            video: { width: { ideal: 1920 }, height: { ideal: 1080 } },
+            audio: false
+        });
+        video.srcObject = stream;
+        document.getElementById('cam-idle').style.display = 'none';
+        document.getElementById('cam-dot').style.background = '#16a34a';
+        document.getElementById('cam-label').textContent = 'Camera live';
+        btnScan.disabled = false;
+        btnScan.style.opacity = '1';
+        btnScan.style.cursor = 'pointer';
+        btnCam.innerHTML = '<i class="ph ph-check" style="font-size:14px;"></i> Camera Active';
+        btnCam.disabled = true;
+    } catch(e) { alert('Camera error: ' + e.message); }
+}
+
+function stopCamera() {
+    if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
+    video.srcObject = null;
+    document.getElementById('cam-idle').style.display = 'flex';
+    document.getElementById('cam-dot').style.background = '#d1d5db';
+    document.getElementById('cam-label').textContent = 'Camera off';
+    btnScan.disabled = true; btnScan.style.opacity = '0.4'; btnScan.style.cursor = 'not-allowed';
+    btnCam.innerHTML = '<i class="ph ph-video-camera" style="font-size:14px;"></i> Start Camera';
+    btnCam.disabled = false;
+}
+
+/* ── Scan ─── */
+async function scanFaces() {
+    if (!stream) return;
+
+    const overlay = document.getElementById('scan-overlay');
+    const detail  = document.getElementById('scan-detail');
+    overlay.classList.remove('hidden');
+    btnScan.disabled = true;
+
+    const cap = document.createElement('canvas');
+    cap.width  = video.videoWidth;
+    cap.height = video.videoHeight;
+    cap.getContext('2d').drawImage(video, 0, 0);
+
+    detail.textContent = 'Detecting faces in frame…';
+    cap.toBlob(async blob => {
+        const subject = document.getElementById('class-subject').value;
+        const attDate = document.getElementById('att-date').value;
+
+        const fd = new FormData();
+        fd.append('image', blob, 'classroom.jpg');
+        if (subject) fd.append('subject', subject);
+
+        try {
+            const resp = await fetch(SCAN_URL, {
+                method: 'POST',
+                headers: { 'X-CSRFToken': CSRF },
+                credentials: 'same-origin',
+                body: fd
+            });
+            const data = await resp.json();
+            overlay.classList.add('hidden');
+            btnScan.disabled = false;
+
+            if (resp.ok) {
+                handleResults(data);
+            } else {
+                showError(data.error || 'Recognition failed. Try again.');
+            }
+        } catch(e) {
+            overlay.classList.add('hidden');
+            btnScan.disabled = false;
+            showError('Network error: ' + e.message);
+        }
+    }, 'image/jpeg', 0.95);
+}
+
+function handleResults(data) {
+    const students = data.recognized_users || [];
+    const unknown  = (data.summary || {}).total_unknown_faces || 0;
+    const detected = (data.summary || {}).total_detected || students.length;
+    const total    = parseInt(document.getElementById('stat-total').textContent) || 0;
+
+    // ── Update scan bottom bar ──
+    document.getElementById('scan-summary').classList.remove('hidden');
+    document.getElementById('s-present').textContent = students.length;
+    document.getElementById('s-unknown').textContent  = unknown;
+    document.getElementById('s-total').textContent    = detected;
+
+    // ── Update Capture Details panel ──
+    const present = recognized.length + students.filter(s => !recognized.find(r => r.user_id === s.user_id)).length;
+    // (will be updated after pushing new entries below)
+    document.getElementById('stat-detected').textContent = detected;
+    document.getElementById('stat-unknown').textContent  = unknown;
+    document.getElementById('stat-hint').style.display   = 'none';
+
+    const area  = document.getElementById('results-area');
+    document.getElementById('results-empty').classList.add('hidden');
+
+    // Fetch user details and append to list
+    students.forEach(async s => {
+        if (recognized.find(r => r.user_id === s.user_id)) return;
+        recognized.push(s);
+
+        let name = 'Student #' + s.user_id, empId = '';
+        try {
+            const ur = await fetch('/api/accounts/users/' + s.user_id + '/', {
+                headers: { 'X-CSRFToken': CSRF }, credentials: 'same-origin'
+            });
+            if (ur.ok) {
+                const ud = await ur.json();
+                name  = ud.full_name || (ud.first_name + ' ' + ud.last_name);
+                empId = ud.employee_id || '';
+            }
+        } catch(e) {}
+
+        const card = document.createElement('div');
+        card.className = 'flex items-center gap-3 px-5 py-3 hover:bg-gray-50 transition-colors';
+        card.innerHTML = `
+            <div class="w-8 h-8 rounded bg-orange-100 text-orange-700 font-bold text-xs flex items-center justify-center shrink-0">
+                ${name[0].toUpperCase()}
+            </div>
+            <div class="flex-1 min-w-0">
+                <p class="font-semibold text-gray-900 text-sm truncate">${name}</p>
+                <p class="text-xs text-gray-400">${empId}</p>
+            </div>
+            <div class="text-right shrink-0">
+                <span class="text-xs font-bold text-green-600">${s.confidence}%</span>
+                <span class="badge badge-present block mt-0.5">Present</span>
+            </div>
+        `;
+        area.appendChild(card);
+
+        // Re-compute stats after each student is confirmed
+        updateSessionStats(total);
+    });
+
+    document.getElementById('present-count').textContent = recognized.length + ' present';
+    scanCount++;
+    updateSessionStats(total);
+}
+
+function updateSessionStats(total) {
+    const p    = recognized.length;
+    const a    = Math.max(total - p, 0);
+    const rate = total > 0 ? Math.round(p / total * 100) : 0;
+
+    document.getElementById('stat-present').textContent = p;
+    document.getElementById('stat-absent').textContent  = a;
+    document.getElementById('stat-rate').textContent    = rate + '%';
+    document.getElementById('stat-bar').style.width     = rate + '%';
+    document.getElementById('present-count').textContent = p + ' present';
+}
+
+// Update class badge when subject changes
+document.getElementById('class-subject').addEventListener('change', function() {
+    const opt = this.options[this.selectedIndex];
+    document.getElementById('session-class-badge').textContent = opt.value ? opt.text : 'No class selected';
+});
+
+function showError(msg) {
+    const area = document.getElementById('results-area');
+    const err  = document.createElement('div');
+    err.className = 'px-5 py-4 flex items-center gap-3 text-red-600 bg-red-50 border-b border-red-100';
+    err.innerHTML = `<i class="ph ph-warning-circle text-xl shrink-0"></i><p class="text-sm font-medium">${msg}</p>`;
+    area.prepend(err);
+    setTimeout(() => err.remove(), 5000);
+}
+
+/* ── Chart ─── */
+new Chart(document.getElementById('week-chart').getContext('2d'), {
+    type: 'bar',
+    data: {
+        labels: {{ chart_labels|safe }},
+        datasets: [
+            { label: 'Present', data: {{ chart_present|safe }}, backgroundColor: '#f97316', borderRadius: 4 },
+            { label: 'Absent',  data: {{ chart_absent|safe }},  backgroundColor: '#f1f5f9', borderRadius: 4 },
+        ]
+    },
+    options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { position: 'top', labels: { usePointStyle: true, boxWidth: 7, font: { size: 11 } } } },
+        scales: {
+            y: { beginAtZero: true, ticks: { stepSize: 1, font: { size: 10 } }, grid: { color: '#f8f8f8' } },
+            x: { grid: { display: false }, ticks: { font: { size: 10 } } }
+        }
+    }
+});
+</script>
+{% endblock %}
