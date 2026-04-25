@@ -41,6 +41,9 @@ class Attendance(models.Model):
         related_name='attendances'
     )
 
+    # The subject/class for which attendance is marked
+    subject = models.CharField(max_length=100, blank=True)
+
     # Manual override info
     marked_by = models.ForeignKey(
         User, on_delete=models.SET_NULL, null=True, blank=True,
@@ -52,8 +55,8 @@ class Attendance(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        # One record per user per day
-        unique_together = ['user', 'date']
+        # One record per user per day per subject
+        unique_together = ['user', 'date', 'subject']
         ordering = ['-date', '-check_in_time']
 
     def __str__(self):
@@ -82,11 +85,6 @@ class ClassSession(models.Model):
     total_expected = models.IntegerField(default=0)
     total_detected = models.IntegerField(default=0)
     total_recognized = models.IntegerField(default=0)
-
-    # The classroom photo used for this session
-    classroom_photo = models.ImageField(
-        upload_to='classroom_photos/%Y/%m/', null=True, blank=True
-    )
 
     created_at = models.DateTimeField(auto_now_add=True)
 

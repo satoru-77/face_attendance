@@ -240,6 +240,7 @@
             <tr class="text-xs uppercase tracking-wide text-gray-400 bg-gray-50 border-b border-gray-100">
                 <th class="px-5 py-2.5 text-left font-semibold">Student</th>
                 <th class="px-5 py-2.5 text-left font-semibold">Roll No.</th>
+                <th class="px-5 py-2.5 text-left font-semibold">Subject</th>
                 <th class="px-5 py-2.5 text-left font-semibold">Time</th>
                 <th class="px-5 py-2.5 text-left font-semibold">Confidence</th>
                 <th class="px-5 py-2.5 text-left font-semibold">Status</th>
@@ -257,6 +258,7 @@
                     </div>
                 </td>
                 <td class="px-5 py-3 font-mono text-xs text-gray-500">{{ rec.user.profile.employee_id }}</td>
+                <td class="px-5 py-3 text-gray-700 font-medium">{{ rec.subject|default:"—" }}</td>
                 <td class="px-5 py-3 text-gray-700 font-medium">{{ rec.check_in_time|time:"H:i A" }}</td>
                 <td class="px-5 py-3">
                     <div class="flex items-center gap-2">
@@ -274,7 +276,7 @@
             </tr>
             {% empty %}
             <tr>
-                <td colspan="5" class="px-5 py-8 text-center text-gray-400 text-sm">
+                <td colspan="6" class="px-5 py-8 text-center text-gray-400 text-sm">
                     No check-ins recorded today yet.
                 </td>
             </tr>

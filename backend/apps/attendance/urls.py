@@ -4,7 +4,6 @@ from . import views
 urlpatterns = [
     # Attendance capture
     path('checkin/', views.KioskCheckinView.as_view(), name='checkin'),
-    path('checkout/', views.KioskCheckoutView.as_view(), name='checkout'),
     path('classroom/', views.ClassroomAttendanceView.as_view(), name='classroom'),
 
     # Records
@@ -13,7 +12,7 @@ urlpatterns = [
 
     # Reports
     path('report/daily/', views.DailyReportView.as_view(), name='report-daily'),
-    path('report/monthly/', views.MonthlyReportView.as_view(), name='report-monthly'),
+    path('report/monthly/', views.MonthlyReportView.as_view(), name='api-report-monthly'),
     path('report/export/', views.ExportCSVView.as_view(), name='report-export'),
 
     # Dashboard

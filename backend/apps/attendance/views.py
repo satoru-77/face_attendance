@@ -44,6 +44,7 @@ class KioskCheckinView(APIView):
     def post(self, request):
         image_file = request.FILES.get('image')
         location = request.data.get('location', '')
+        subject = request.data.get('subject', '')
 
         if not image_file:
             return Response({'error': 'Image is required.'}, status=400)
@@ -67,12 +68,12 @@ class KioskCheckinView(APIView):
 
         user_id, confidence = results[0]
 
-        # Confidence threshold: 70%
-        if confidence < 0.70:
+        # Confidence threshold: 70% (0-100 scale)
+        if confidence < 70.0:
             return Response({
                 'recognized': False,
-                'confidence': round(confidence * 100, 1),
-                'error': f'Face not recognized with sufficient confidence ({round(confidence * 100, 1)}%). Try again with better lighting.'
+                'confidence': round(confidence, 1),
+                'error': f'Face not recognized with sufficient confidence ({round(confidence, 1)}%). Try again with better lighting.'
             }, status=400)
 
         try:
@@ -91,11 +92,12 @@ class KioskCheckinView(APIView):
         attendance, created = Attendance.objects.get_or_create(
             user=user,
             date=today,
+            subject=subject,
             defaults={
                 'check_in_time': now_time,
                 'status': attendance_status,
                 'attendance_mode': 'KIOSK',
-                'confidence_score': round(confidence * 100, 2),
+                'confidence_score': round(confidence, 2),
                 'location': location,
             }
         )
@@ -111,7 +113,7 @@ class KioskCheckinView(APIView):
         return Response({
             'recognized': True,
             'action': action,
-            'confidence': round(confidence * 100, 1),
+            'confidence': round(confidence, 1),
             'user': {
                 'id': user.id,
                 'name': user.get_full_name(),
@@ -226,11 +228,12 @@ class ClassroomAttendanceView(APIView):
             attendance, created = Attendance.objects.get_or_create(
                 user=user,
                 date=today,
+                subject=subject,
                 defaults={
                     'check_in_time': now_time,
                     'status': att_status,
                     'attendance_mode': 'CLASSROOM',
-                    'confidence_score': round(confidence * 100, 2),
+                    'confidence_score': round(confidence, 2),
                     'location': location,
                     'class_session': session,
                     'marked_by': request.user,
@@ -249,6 +252,7 @@ class ClassroomAttendanceView(APIView):
                         Attendance.objects.get_or_create(
                             user=user,
                             date=today,
+                            subject=subject,
                             defaults={
                                 'status': 'ABSENT',
                                 'attendance_mode': 'CLASSROOM',
@@ -277,7 +281,7 @@ class ClassroomAttendanceView(APIView):
             'recognized_users': [
                 {
                     'user_id': r['user_id'],
-                    'confidence': round(r['confidence'] * 100, 1),
+                    'confidence': round(r['confidence'], 1),
                     'bbox': r['bbox']
                 }
                 for r in results['recognized']
